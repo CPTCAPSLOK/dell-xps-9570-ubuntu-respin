@@ -1,14 +1,14 @@
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://paypal.me/matteoiervasi)
 [![Gitter chat](https://badges.gitter.im/gitterHQ/gitter.png)](https://gitter.im/dell-xps-9570-ubuntu-respin/Lobby?utm_source=share-link&utm_medium=link&utm_campaign=share-link)
 
-# DELL XPS 15 9570 Ubuntu post installation script (18.04,19.04 and 19.10)
+# DELL XPS 15 9570 Ubuntu post installation script (18.04,19.10 and 20.04)
 
 ### Table of Contents
 1. [Post-install script](#post-install-script)
 2. [Switching from one graphic card to the other](#how-to-switch-from-one-graphic-card-to-the-other)
 3. [Troubleshooting](#troubleshooting)
 
-Collection of scripts and tweaks to make Ubuntu 18.04/19.04/19.10 run smooth on Dell XPS 15 9570.
+Collection of scripts and tweaks to make Ubuntu 18.04/19.10/20.04 run smooth on Dell XPS 15 9570.
 I suggest everyone to use the post install method, the respun ISO is no longer supported nor neeeded for booting Ubuntu on 9570 as the stock one contains the needed fixes.
 
 All informations, tips and tricks was gathered from:

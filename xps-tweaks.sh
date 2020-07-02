@@ -8,8 +8,8 @@ NC='\033[0m' # No Color
 release=$(lsb_release -c -s)
 
 # Check if the script is running under Ubuntu 18.04 Bionic Beaver
-if [ "$release" != "bionic" ] && [ "$release" != "disco" ] && [ "$release" != "eoan" ] ; then
-    >&2 echo -e "${RED}This script is made for Ubuntu 18.04/19.04/19.10!${NC}"
+if [ "$release" != "bionic" ] && [ "$release" != "eoan" ] && [ "$release" != "focal" ] ; then
+    >&2 echo -e "${RED}This script is made for Ubuntu 18.04/19.10/20.04!${NC}"
     exit 1
 fi
 
@@ -25,52 +25,52 @@ apt -y update
 apt -y full-upgrade
 
 # Install all the power management tools
-add-apt-repository -y ppa:linrunner/tlp
-apt -y update
+if [ "$release" != "focal" ] ; then
+    add-apt-repository -y ppa:linrunner/tlp
+    apt -y update
+fi
 apt -y install thermald tlp tlp-rdw powertop
 
 # Fix Sleep/Wake Bluetooth Bug
 sed -i '/RESTORE_DEVICE_STATE_ON_STARTUP/s/=.*/=1/' /etc/tlp.conf
 systemctl restart tlp
 
-# Install the latest nVidia driver and codecs
-echo -e "${GREEN}Do you wish to enable PRIME Offloading on the NVIDIA GPU? This may increase battery drain but will allow dynamic switching of the NVIDIA GPU without having to log out.${NC}"
-select yn in "Yes" "No"; do
-	case $yn in
-	    Yes )
-            # Add repository with Xorg Builds containing required NVIDIA patches.
-	    if [ "$release" != "eoan" ]; then
-	    	add-apt-repository -y ppa:aplattner/ppa
+# Install the latest nVidia driver and codecs (not needed in Focal as it's all ready out-of-the-box)
+if [ "$release" != "focal" ] ; then
+    echo -e "${GREEN}Do you wish to enable PRIME Offloading on the NVIDIA GPU? This may increase battery drain but will allow dynamic switching of the NVIDIA GPU without having to log out.${NC}"
+    select yn in "Yes" "No"; do
+        case $yn in
+            Yes )
+                # Add repository with Xorg Builds containing required NVIDIA patches.
+                if [ "$release" == "bionic" ]; then
+                    add-apt-repository -y ppa:aplattner/ppa
+                fi
+                # Enable Proprietary GPU PPA
+                add-apt-repository -y ppa:graphics-drivers/ppa
 
-            # Enable Proprietary GPU PPA
-            add-apt-repository -y ppa:graphics-drivers/ppa
+                apt -y update
+                apt -y upgrade
+                apt -y install nvidia-driver-440 nvidia-settings
 
-            apt -y update
-            apt -y upgrade
-            apt -y install nvidia-driver-440 nvidia-settings
+                # Create simple script for launching programs on the NVIDIA GPU
+                echo '__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME="nvidia" __VK_LAYER_NV_optimus="NVIDIA_only" exec "$@"' >> /usr/local/bin/prime
+                chmod +x /usr/local/bin/prime
 
-            # Create simple script for launching programs on the NVIDIA GPU
-            echo '__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME="nvidia" __VK_LAYER_NV_optimus="NVIDIA_only" exec "$@"' >> /usr/local/bin/prime
-            chmod +x /usr/local/bin/prime
+                # Create xorg.conf.d directory (If it doesn't already exist) and copy PRIME configuration file
+                mkdir -p /etc/X11/xorg.conf.d/
+                wget https://raw.githubusercontent.com/JackHack96/dell-xps-9570-ubuntu-respin/master/10-prime-offload.conf
+                mv 10-prime-offload.conf /etc/X11/xorg.conf.d/
 
-            # Create xorg.conf.d directory (If it doesn't already exist) and copy PRIME configuration file
-            mkdir -p /etc/X11/xorg.conf.d/
-            wget https://raw.githubusercontent.com/JackHack96/dell-xps-9570-ubuntu-respin/master/10-prime-offload.conf
-            mv 10-prime-offload.conf /etc/X11/xorg.conf.d/
-        else
-            apt -y update
-            ubuntu-drivers autoinstall
-	fi
-	break;;
-        No )
-        apt -y update
-        ubuntu-drivers autoinstall
-        break;;
-    esac
-done
-
-# Enable modesetting on the NVIDIA Driver (Enables use of offloading and PRIME Sync)
-echo "options nvidia-drm modeset=1" >> /etc/modprobe.d/nvidia-drm.conf
+                # Enable modesetting on the NVIDIA Driver (Enables use of offloading and PRIME Sync)
+                echo "options nvidia-drm modeset=1" >> /etc/modprobe.d/nvidia-drm.conf
+                break;;
+            No )
+                apt -y update
+                ubuntu-drivers autoinstall
+                break;;
+        esac
+    done
+fi
 
 # Fix Audio Feedback/White Noise from Headphones on Battery Bug
 echo -e "${GREEN}Do you wish to fix the headphone white noise on battery bug? (if you do not have this issue, there is no need to enable it) (may slightly impact battery life)${NC}"
@@ -127,9 +127,9 @@ daemonize = no
 ; cpu-limit = no
 
 high-priority = yes
-; nice-level = -11
+nice-level = -11
 
-; realtime-scheduling = yes
+realtime-scheduling = yes
 realtime-priority = 9
 
 ; exit-idle-time = 20
@@ -147,10 +147,10 @@ realtime-priority = 9
 ; log-backtrace = 0
 
 resample-method = soxr-vhq
-; avoid-resampling = false
+avoid-resampling = true
 ; enable-remixing = yes
 ; remixing-use-all-sink-channels = yes
-enable-lfe-remixing = yes
+enable-lfe-remixing = no
 ; lfe-crossover-freq = 0
 
 flat-volumes = no
@@ -206,8 +206,7 @@ fi
 
 # Let users check fan speed with lm-sensors
 echo "options dell-smm-hwmon restricted=0 force=1" > /etc/modprobe.d/dell-smm-hwmon.conf
-if < /etc/modules grep "dell-smm-hwmon" &>/dev/null
-then
+if < /etc/modules grep "dell-smm-hwmon" &>/dev/null; then
     echo "dell-smm-hwmon is already in /etc/modules!"
 else
     echo "dell-smm-hwmon" >> /etc/modules
@@ -220,14 +219,19 @@ GRUB_OPTIONS="quiet splash acpi_rev_override=1 acpi_osi=Linux nouveau.modeset=0 
 echo -e "${GREEN}Do you wish to disable SPECTRE/Meltdown patches for performance?${NC}"
 select yn in "Yes" "No"; do
     case $yn in
-        Yes ) GRUB_OPTIONS+="pti=off spectre_v2=off l1tf=off nospec_store_bypass_disable no_stf_barrier"; break;;
+        Yes )
+            if [[ $(uname -r) == *"4.15"* ]]; then
+                GRUB_OPTIONS+="noibrs noibpb nopti nospectre_v2 nospectre_v1 l1tf=off nospec_store_bypass_disable no_stf_barrier mds=off mitigations=off"
+            else
+                GRUB_OPTIONS+="mitigations=off"
+            fi
+            break;;
         No ) break;;
     esac
 done
 GRUB_OPTIONS_VAR="$GRUB_OPTIONS_VAR_NAME=\"$GRUB_OPTIONS\""
 
-if < /etc/default/grub grep "$GRUB_OPTIONS_VAR" &>/dev/null
-then
+if < /etc/default/grub grep "$GRUB_OPTIONS_VAR" &>/dev/null; then
     echo -e "${GREEN}Grub is already tweaked!${NC}"
 else
     sed -i "s/^$GRUB_OPTIONS_VAR_NAME=.*/$GRUB_OPTIONS_VAR_NAME=\"$GRUB_OPTIONS\"/g" /etc/default/grub
